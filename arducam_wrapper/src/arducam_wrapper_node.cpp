@@ -509,7 +509,7 @@ void brightness_adjustment(ArduCamHandle handle, Mat _srcFrame, int index) {
 
             if (delta_brightness > (ideal_brightness * 0.20) && delta_brightness > 0 &&
                 avgLum < ideal_brightness - (ideal_brightness * 0.05)) {
-                if (exposure_to_time(exposure_val) <= 25.0) {
+                if (exposure_to_time(exposure_val) <= 20.0) {
                     ideal_exposure = ideal_exposure + delta_exposure;
                     exposure_val += ideal_exposure * 0.5;
                 }
