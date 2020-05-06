@@ -1,0 +1,9 @@
+<launch>
+
+        <arg name="camera_config" value="MT9V022_MONO_8b_640x480_64fps.cfg" /> <!-- Config file in camera_config_files folder of your camera. -->
+        <arg name="serial_number" value="" /> <!-- Serial number of the camera in the form of "XXXX-XXXX-XXXX", leave it blank "" if there is only one camera. -->
+        <arg name="frame_id" value="camera_frame" /> <!--Topic frame_id. -->
+
+        <node name="arducam_wrapper" pkg="arducam_wrapper" type="arducam_wrapper" output="screen" args="$(find arducam_wrapper)/Config/USB2.0_UC-391_Rev.D/MT9V022/$(arg camera_config)" />
+
+</launch>
