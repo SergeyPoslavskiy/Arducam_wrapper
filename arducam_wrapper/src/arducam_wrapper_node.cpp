@@ -1,28 +1,21 @@
 // ArduCam_test.cpp : Defines the entry point for the console application.
 //
-#ifdef linux
-
 #include <ArduCamLib.h>
 #include <unistd.h>
 #include <termios.h>
 
-#endif
 
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
-#include <sstream>
+
 
 #include <opencv2/opencv.hpp>
-#include <thread>
 #include <time.h>
 #include <iostream>
 #include <istream>
 #include <string>
-
-#include <sys/types.h>
 #include <sys/stat.h>
-
 #include <signal.h>
 
 #include "arducam_config_parser.h"
@@ -35,7 +28,7 @@
 #include "cvui.h"
 
 #define WINDOW_NAME "MT9V022"
-//#define USE_SOFT_TRIGGER
+
 
 using namespace std;
 using namespace cv;
@@ -258,7 +251,6 @@ bool camera_initFromFile(std::string filename, ArduCamHandle &cameraHandle, Ardu
 
     int ret_val = ArduCam_open(cameraHandle, &cameraCfg, index);
     if (ret_val == USB_CAMERA_NO_ERROR) {
-        //ArduCam_enableForceRead(cameraHandle);	//Force display image
         Uint8 u8Buf[8];
         for (int i = 0; i < configs_length; i++) {
             uint32_t type = configs[i].type;
@@ -401,8 +393,6 @@ double exposure_to_time(double exp_val) {
 
 void show_ui(ArduCamHandle handle, Mat frame, int index) {
 
-
-    //cout << "Index:  "<< index << endl;
     frame = cv::Scalar(49, 52, 49);
     cvui::text(frame, 5, 7, "Camera: MT9V022", 0.4, 0x999999);
     int _fps = DisplayFps();
@@ -418,7 +408,7 @@ void show_ui(ArduCamHandle handle, Mat frame, int index) {
 
     //Checkbox section
     if (cvui::checkbox(frame, 5, 40, "Exposure Adjustment", &auto_exposure)) {
-        //set bit
+        //bool check
 
     }
 
@@ -440,13 +430,11 @@ void show_ui(ArduCamHandle handle, Mat frame, int index) {
         //set bit
         out = 0b01000000;
         out = out | hdr_in;
-        //printf("HDR ON\r\n");
         ArduCam_writeSensorReg(handle, 0x0f, out);
     } else {
         //unset bit
         out = 0b10111111;
         out = out & hdr_in;
-        //printf("HDR OFF\r\n");
         ArduCam_writeSensorReg(handle, 0x0f, out);
     }
 
@@ -472,7 +460,7 @@ void show_ui(ArduCamHandle handle, Mat frame, int index) {
 
 }
 
-void brightness_adjustment(ArduCamHandle handle, Mat _srcFrame, int index) {
+void brightness_adjustment(Mat _srcFrame, int index) {
 
     double av_brightness, ideal_exposure, ideal_brightness, delta_brightness, delta_exposure;
     Mat mask(_srcFrame.rows, _srcFrame.cols, CV_8UC1, Scalar(0, 0));
@@ -496,39 +484,34 @@ void brightness_adjustment(ArduCamHandle handle, Mat _srcFrame, int index) {
     float avgLum = Totalintensity / counter;
     delta_brightness = ideal_brightness - avgLum;
     delta_exposure = round(1.071 * (delta_brightness + ideal_brightness) - 8.4287);
-    if (index == 0) {
-        if (!auto_exposure) {
+    if (index == 0 && !auto_exposure) {
 
-            if (avgLum < ideal_brightness - (ideal_brightness * 0.05)) {
-                exposure_val += 3;
-            }
+        if (avgLum < ideal_brightness - (ideal_brightness * 0.05)) {
+            exposure_val += 3;
+        }
 
-            if (avgLum > ideal_brightness + (ideal_brightness * 0.05)) {
-                exposure_val -= 3;
-            }
+        if (avgLum > ideal_brightness + (ideal_brightness * 0.05)) {
+            exposure_val -= 3;
+        }
 
-            if (delta_brightness > (ideal_brightness * 0.20) && delta_brightness > 0 &&
-                avgLum < ideal_brightness - (ideal_brightness * 0.05)) {
-                if (exposure_to_time(exposure_val) <= 20.0) {
-                    ideal_exposure = ideal_exposure + delta_exposure;
-                    exposure_val += ideal_exposure * 0.5;
-                }
-            }
+        if (delta_brightness > (ideal_brightness * 0.20) && delta_brightness > 0 &&
+            avgLum < ideal_brightness - (ideal_brightness * 0.05)) {
+            ideal_exposure = ideal_exposure + delta_exposure;
+            exposure_val += ideal_exposure * 0.5;
+        }
 
-            if (delta_brightness < -(ideal_brightness * 0.20) && delta_brightness < 0 &&
-                avgLum > ideal_brightness + (ideal_brightness * 0.05)) {
-                if (exposure_val > ideal_exposure) {
-                    ideal_exposure = ideal_exposure - delta_exposure;
-                    exposure_val -= ideal_exposure * 0.8;
-                }
+        if (delta_brightness < -(ideal_brightness * 0.20) && delta_brightness < 0 &&
+            avgLum > ideal_brightness + (ideal_brightness * 0.05)) {
+            if (exposure_val > ideal_exposure) {
+                ideal_exposure = ideal_exposure - delta_exposure;
+                exposure_val -= ideal_exposure * 0.8;
             }
         }
+
 
 /*
 //shutterCapturedLight = avgLum/(exposure_val * gain_val);
 //double avIm_brightness = cv::mean(_srcFrame)[0];   massiv[0..254] massiv[_srcFrame.at<uchar>(i,j)] +=1  
-
-
 
 if (!auto_exposure){ 
 ofstream myfile;
@@ -540,36 +523,34 @@ myfile << avgLum <<" "<< exposure_val << endl;
 
 }
 */
-
 //std::cout << "ideal_exposure: " << ideal_exposure << endl;
+
         std::cout << "Image Brigtness1: " << avgLum << endl;
         std::cout << "Exposure: " << exposure_val << endl;
     }
 
-    if (index == 1) {
+    if (index == 1 && !auto_exposure) {
 
-        if (!auto_exposure) {
 
-            if (avgLum < ideal_brightness - (ideal_brightness * 0.05)) {
-                exposure_val2 += 3;
-            }
+        if (avgLum < ideal_brightness - (ideal_brightness * 0.05)) {
+            exposure_val2 += 3;
+        }
 
-            if (avgLum > ideal_brightness + (ideal_brightness * 0.05)) {
-                exposure_val2 -= 3;
-            }
+        if (avgLum > ideal_brightness + (ideal_brightness * 0.05)) {
+            exposure_val2 -= 3;
+        }
 
-            if (delta_brightness > (ideal_brightness * 0.30) && delta_brightness > 0 &&
-                avgLum < ideal_brightness - (ideal_brightness * 0.05)) {
-                ideal_exposure = ideal_exposure + delta_exposure;
-                exposure_val2 += ideal_exposure * 0.4;
-            }
+        if (delta_brightness > (ideal_brightness * 0.30) && delta_brightness > 0 &&
+            avgLum < ideal_brightness - (ideal_brightness * 0.05)) {
+            ideal_exposure = ideal_exposure + delta_exposure;
+            exposure_val2 += ideal_exposure * 0.4;
+        }
 
-            if (delta_brightness < -(ideal_brightness * 0.40) && delta_brightness < 0 &&
-                avgLum > ideal_brightness + (ideal_brightness * 0.05)) {
-                if (exposure_val2 > ideal_exposure) {
-                    ideal_exposure = ideal_exposure - delta_exposure;
-                    exposure_val2 -= ideal_exposure;
-                }
+        if (delta_brightness < -(ideal_brightness * 0.40) && delta_brightness < 0 &&
+            avgLum > ideal_brightness + (ideal_brightness * 0.05)) {
+            if (exposure_val2 > ideal_exposure) {
+                ideal_exposure = ideal_exposure - delta_exposure;
+                exposure_val2 -= ideal_exposure;
             }
         }
 
@@ -612,7 +593,6 @@ void getAndDisplaySingleFrame(ArduCamHandle handle, int index, image_transport::
 
         total_frames[index]++;
 
-        //DisplayFps(index);
         if (save_flag) {
             char save_path[50];
 
@@ -623,13 +603,7 @@ void getAndDisplaySingleFrame(ArduCamHandle handle, int index, image_transport::
                     printf("mkdir error!\n");
             }
 #endif
-#ifdef _WIN32
-            if (_access(save_path, 0) != 0)
-            {
-                if (_mkdir(save_path))
-                    printf("mkdir error!\n");
-            }
-#endif
+
             printf("Camera%d,save image%ld.jpg.\n", index, total_frames[index]);
             char imageName[50];
             sprintf(imageName, "images%d/image%ld.jpg", index, total_frames[index]);
@@ -647,10 +621,9 @@ void getAndDisplaySingleFrame(ArduCamHandle handle, int index, image_transport::
 
         //cv::resize(rawImage,rawImage,cv::Size(640, 480), (0, 0), (0, 0), cv::INTER_LINEAR);
         //show_ui (handle,  frame);
-        brightness_adjustment(handle, rawImage, index);
+        brightness_adjustment(rawImage, index);
         cv::imshow(name, rawImage);
         cvWaitKey(1);
-        // cv::waitKey(50);
         //printf("End display.\n");
     } else {
         printf("Take picture fail,ret_val = %d\n", rtn_val);
@@ -751,19 +724,10 @@ int main(int argc, char **argv) {
             //printf("-----%d\n",rtn_val);
             if (rtn_val == 1) {
 
-#ifdef USE_SOFT_TRIGGER
-                sTriggerSendTime[i] = 0;
-#endif
                 getAndDisplaySingleFrame(tempHandle, i, &pub);
                 show_ui(tempHandle, frame, i);
 
             }
-#ifdef USE_SOFT_TRIGGER
-            else if(time(NULL) - sTriggerSendTime[i] > 3){
-                ArduCam_softTrigger(tempHandle);
-                sTriggerSendTime[i] = time(NULL);
-            }
-#endif
         }
         //usleep( 1000 * 50);
         //cvWaitKey(1);
