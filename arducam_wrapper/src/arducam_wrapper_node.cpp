@@ -11,12 +11,12 @@
 
 
 #include <opencv2/opencv.hpp>
-#include <time.h>
+#include <ctime>
 #include <iostream>
 #include <istream>
 #include <string>
 #include <sys/stat.h>
-#include <signal.h>
+#include <csignal>
 
 #include "arducam_config_parser.h"
 #include <opencv2/highgui/highgui.hpp>
@@ -42,13 +42,14 @@ int color_mode = 0;
 
 bool auto_exposure = true;
 bool auto_gain = true;
+bool hdr = false;
 
 int exposure_val = 10;
 int exposure_val2 = 10;
 int gain_val = 64;
 
-bool hdr = false;
-bool hdr_prev = false;
+
+
 
 
 
@@ -251,7 +252,7 @@ bool camera_initFromFile(std::string filename, ArduCamHandle &cameraHandle, Ardu
 
     int ret_val = ArduCam_open(cameraHandle, &cameraCfg, index);
     if (ret_val == USB_CAMERA_NO_ERROR) {
-        Uint8 u8Buf[8];
+        //Uint8 u8Buf[8];
         for (int i = 0; i < configs_length; i++) {
             uint32_t type = configs[i].type;
             if (((type >> 16) & 0xFF) && ((type >> 16) & 0xFF) != cameraCfg.usbType)
@@ -459,31 +460,57 @@ void show_ui(ArduCamHandle handle, Mat frame, int index) {
     cv::imshow(WINDOW_NAME, frame);
 
 }
+/*
+double PIDCalculate( double setpoint, double pv, double _max, double _min,  double _Kp, double _Ki, double _Kd, double _dt)
+{
+    double _pre_error;
+    double _integral;
+
+    // Calculate error
+    double error = setpoint - pv;
+
+    // Proportional term
+    double Pout = _Kp * error;
+
+    // Integral term
+    _integral += error * _dt;
+    double Iout = _Ki * _integral;
+
+    // Derivative term
+    double derivative = (error - _pre_error) / _dt;
+    double Dout = _Kd * derivative;
+
+    // Calculate total output
+    double output = Pout + Iout + Dout;
+
+    // Restrict to max/min
+    if( output > _max )
+        output = _max;
+    else if( output < _min )
+        output = _min;
+
+    // Save error to previous error
+    _pre_error = error;
+
+    return output;
+}
+*/
 
 void brightness_adjustment(Mat _srcFrame, int index) {
 
-    double av_brightness, ideal_exposure, ideal_brightness, delta_brightness, delta_exposure;
+    double  ideal_exposure, ideal_brightness, delta_brightness, delta_exposure;
     Mat mask(_srcFrame.rows, _srcFrame.cols, CV_8UC1, Scalar(0, 0));
     circle(mask, Point(260, 240), 232, Scalar(255, 255), -1, 8);
 
     ideal_brightness = 90;
     ideal_exposure = round(1.071 * ideal_brightness - 8.4287);
 
-    int Totalintensity, counter = 0;
+    //cv::imshow("Ardu", _srcFrame | mask);
+    int avgLum = cv::mean(_srcFrame, mask)[0];
 
-    for (int i = 0; i < mask.rows; ++i) {
-        for (int j = 0; j < mask.cols; ++j) {
-            if (mask.at<uchar>(i, j) == 0) continue;
-            Totalintensity += (int) _srcFrame.at<uchar>(i, j);
-            counter += 1;
-        }
-    }
-
-//cv::imshow("Ardu", _srcFrame | mask);
-
-    float avgLum = Totalintensity / counter;
     delta_brightness = ideal_brightness - avgLum;
-    delta_exposure = round(1.071 * (delta_brightness + ideal_brightness) - 8.4287);
+    delta_exposure = round(1.071 * (ideal_brightness + delta_brightness) - 8.4287);
+
     if (index == 0 && !auto_exposure) {
 
         if (avgLum < ideal_brightness - (ideal_brightness * 0.05)) {
@@ -494,24 +521,24 @@ void brightness_adjustment(Mat _srcFrame, int index) {
             exposure_val -= 3;
         }
 
-        if (delta_brightness > (ideal_brightness * 0.20) && delta_brightness > 0 &&
-            avgLum < ideal_brightness - (ideal_brightness * 0.05)) {
+        if (delta_brightness > (ideal_brightness * 0.20) && delta_brightness > 0) {
             ideal_exposure = ideal_exposure + delta_exposure;
             exposure_val += ideal_exposure * 0.5;
+
         }
 
-        if (delta_brightness < -(ideal_brightness * 0.20) && delta_brightness < 0 &&
-            avgLum > ideal_brightness + (ideal_brightness * 0.05)) {
+        if (delta_brightness < -(ideal_brightness * 0.20) && delta_brightness < 0) {
             if (exposure_val > ideal_exposure) {
                 ideal_exposure = ideal_exposure - delta_exposure;
-                exposure_val -= ideal_exposure * 0.8;
+                exposure_val -= ideal_exposure * 0.85;
+
+
             }
         }
 
 
 /*
-//shutterCapturedLight = avgLum/(exposure_val * gain_val);
-//double avIm_brightness = cv::mean(_srcFrame)[0];   massiv[0..254] massiv[_srcFrame.at<uchar>(i,j)] +=1  
+shutterCapturedLight = avgLum/(exposure_val * gain_val);
 
 if (!auto_exposure){ 
 ofstream myfile;
@@ -523,7 +550,7 @@ myfile << avgLum <<" "<< exposure_val << endl;
 
 }
 */
-//std::cout << "ideal_exposure: " << ideal_exposure << endl;
+        //std::cout << "ideal_exposure: " << ideal_exposure << endl;
 
         std::cout << "Image Brigtness1: " << avgLum << endl;
         std::cout << "Exposure: " << exposure_val << endl;
@@ -550,11 +577,11 @@ myfile << avgLum <<" "<< exposure_val << endl;
             avgLum > ideal_brightness + (ideal_brightness * 0.05)) {
             if (exposure_val2 > ideal_exposure) {
                 ideal_exposure = ideal_exposure - delta_exposure;
-                exposure_val2 -= ideal_exposure;
+                exposure_val2 -= ideal_exposure * 0.8;
             }
         }
 
-//std::cout << "ideal_exposure: " << ideal_exposure << endl;
+        //std::cout << "ideal_exposure: " << ideal_exposure << endl;
         std::cout << "Image Brigtness2: " << avgLum << endl;
         std::cout << "Exposure2: " << exposure_val2 << endl;
     }
@@ -567,7 +594,6 @@ long total_frames[30];
 void getAndDisplaySingleFrame(ArduCamHandle handle, int index, image_transport::Publisher *pub) {
 
     //cv::setNumThreads(8);
-    //printf("Take picture.\n");
     char name[50];
     sprintf(name, "ArduCam%d", index);
     cv::namedWindow(name, cv::WINDOW_AUTOSIZE);
@@ -584,7 +610,6 @@ void getAndDisplaySingleFrame(ArduCamHandle handle, int index, image_transport::
         rawImage = ConvertImage(frameData);
 
         msg = cv_bridge::CvImage(std_msgs::Header(), "mono8", rawImage).toImageMsg();
-        //pub.publish(msg);
         pub->publish(msg);
         if (!rawImage.data) {
             std::cout << "Convert image fail,No image data \n";
@@ -597,12 +622,12 @@ void getAndDisplaySingleFrame(ArduCamHandle handle, int index, image_transport::
             char save_path[50];
 
             sprintf(save_path, "images%d", index);
-#ifdef linux
+
             if (access(save_path, F_OK) != 0) {
                 if (mkdir(save_path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1)
                     printf("mkdir error!\n");
             }
-#endif
+
 
             printf("Camera%d,save image%ld.jpg.\n", index, total_frames[index]);
             char imageName[50];
@@ -619,12 +644,10 @@ void getAndDisplaySingleFrame(ArduCamHandle handle, int index, image_transport::
             cv::imwrite(imageName, rawImage);
         }
 
-        //cv::resize(rawImage,rawImage,cv::Size(640, 480), (0, 0), (0, 0), cv::INTER_LINEAR);
         //show_ui (handle,  frame);
         brightness_adjustment(rawImage, index);
         cv::imshow(name, rawImage);
         cvWaitKey(1);
-        //printf("End display.\n");
     } else {
         printf("Take picture fail,ret_val = %d\n", rtn_val);
     }
@@ -644,19 +667,18 @@ void signal_handle(int signal) {
 
 int main(int argc, char **argv) {
 
-
     //image_transport::ImageTransport it(nh);
     //pub = new image_transport::Publisher(it.advertise("arducam/image", 1));
 
     //receive Ctrl + C signal
     signal(SIGINT, signal_handle);
-#ifdef linux
+
     static struct termios oldt, newt;
     tcgetattr(STDIN_FILENO, &oldt);
     newt = oldt;
     newt.c_lflag &= ~(ICANON);
     tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-#endif
+
     ros::init(argc, argv, "arducam_wrapper", ros::init_options::NoSigintHandler);
     ros::NodeHandle nh;
     image_transport::ImageTransport it(nh);
@@ -687,9 +709,8 @@ int main(int argc, char **argv) {
         printf("index:%4d\tSerial:%s\n", pUsbIdxArray[i].u8UsbIndex, serial);
     }
 
-#ifdef linux
     sleep(2);
-#endif
+
 
     printf("Found %d devices.\n", camera_num);
     ArduCamHandle cameraHandles[16];
@@ -721,7 +742,6 @@ int main(int argc, char **argv) {
                 continue;
             }
             Uint32 rtn_val = ArduCam_isFrameReady(tempHandle);
-            //printf("-----%d\n",rtn_val);
             if (rtn_val == 1) {
 
                 getAndDisplaySingleFrame(tempHandle, i, &pub);
@@ -746,9 +766,9 @@ int main(int argc, char **argv) {
     std::cout << std::endl << "Press ENTER to exit..." << std::endl;
     std::string str_key;
     std::getline(std::cin, str_key);
-#ifdef linux
+
     tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-#endif
+
     return 0;
 }
 
