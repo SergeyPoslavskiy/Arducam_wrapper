@@ -402,11 +402,13 @@ void show_ui(ArduCamHandle handle, Mat frame, int index) {
     cvui::printf(frame, 140, 7, "FPS: %d", _fps);
     cvui::printf(frame, 210, 7, "Exposure: Cam1 %0.2f ms, Cam2 %0.2f ms", _expTimeCam1, _expTimeCam2);
 
-    Uint32 in, hdr_in, out;
+    Uint32 in, hdr_in, out, current_bin, desired_bin;
+    desired_bin = 30;
     ArduCam_readSensorReg(handle, 0xaf, &in);
     ArduCam_readSensorReg(handle, 0x0f, &hdr_in);
-
-
+    ArduCam_readSensorReg(handle, 0xbc, &current_bin);
+    //ArduCam_readSensorReg(handle, 0xa5, &desired_bin);
+    cout << current_bin << endl;
     //Checkbox section
     if (cvui::checkbox(frame, 5, 40, "Exposure Adjustment", &auto_exposure)) {
         //bool check
@@ -460,6 +462,7 @@ void show_ui(ArduCamHandle handle, Mat frame, int index) {
     cv::imshow(WINDOW_NAME, frame);
 
 }
+
 /*
 double PIDCalculate( double setpoint, double pv, double _max, double _min,  double _Kp, double _Ki, double _Kd, double _dt)
 {
@@ -498,7 +501,7 @@ double PIDCalculate( double setpoint, double pv, double _max, double _min,  doub
 
 void brightness_adjustment(Mat _srcFrame, int index) {
 
-    double  ideal_exposure, ideal_brightness, delta_brightness, delta_exposure;
+    double ideal_exposure, ideal_brightness, delta_brightness, delta_exposure;
     Mat mask(_srcFrame.rows, _srcFrame.cols, CV_8UC1, Scalar(0, 0));
     circle(mask, Point(260, 240), 232, Scalar(255, 255), -1, 8);
 
@@ -603,7 +606,7 @@ void getAndDisplaySingleFrame(ArduCamHandle handle, int index, image_transport::
 
     cv::Mat rawImage;
 
-    Uint32 rtn_val = ArduCam_getSingleFrame(handle, frameData, 1000);
+    Uint32 rtn_val = ArduCam_getSingleFrame(handle, frameData, 100);
 
 
     if (rtn_val == USB_CAMERA_NO_ERROR) {
@@ -617,11 +620,11 @@ void getAndDisplaySingleFrame(ArduCamHandle handle, int index, image_transport::
         }
 
         total_frames[index]++;
-
+        //cout << "index: "<< index <<"total frames "<< total_frames[index] << endl;
         if (save_flag) {
             char save_path[50];
 
-            sprintf(save_path, "images%d", index);
+            sprintf(save_path, "/home/sergey/Dev/arducam_ws/images%d", index);
 
             if (access(save_path, F_OK) != 0) {
                 if (mkdir(save_path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1)
@@ -629,9 +632,9 @@ void getAndDisplaySingleFrame(ArduCamHandle handle, int index, image_transport::
             }
 
 
-            printf("Camera%d,save image%ld.jpg.\n", index, total_frames[index]);
+            printf("Camera%d,save image%ld.bmp\n", index, total_frames[index]);
             char imageName[50];
-            sprintf(imageName, "images%d/image%ld.jpg", index, total_frames[index]);
+            sprintf(imageName, "/home/sergey/Dev/arducam_ws/images%d/image%ld.bmp", index, total_frames[index]);
 
             if (save_raw) {
                 char rawName[50];
